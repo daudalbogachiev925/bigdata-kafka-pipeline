@@ -1,0 +1,42 @@
+"""Consumer: читает события из Kafka, фильтрует, пишет в БД."""
+from kafka import KafkaConsumer
+import json, logging
+import psycopg2
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+def get_db():
+    return psycopg2.connect(
+        host="localhost", database="events",
+        user="postgres", password="secret"
+    )
+
+def save_event(conn, event):
+    with conn.cursor() as cur:
+        cur.execute(
+            "INSERT INTO events (user_id, event_type, region, amount) VALUES (%s, %s, %s, %s)",
+            (event["user_id"], event["event_type"], event["region"], event["amount"])
+        )
+    conn.commit()
+
+def main():
+    conn = get_db()
+    consumer = KafkaConsumer(
+        'user_events',
+        bootstrap_servers='localhost:9092',
+        value_deserializer=lambda v: json.loads(v.decode('utf-8')),
+        auto_offset_reset='earliest',
+        group_id='analytics'
+    )
+    count = 0
+    for msg in consumer:
+        event = msg.value
+        if event["event_type"] == "purchase":
+            save_event(conn, event)
+            count += 1
+            if count % 10 == 0:
+                logger.info(f"Сохранено покупок: {count}")
+
+if __name__ == "__main__":
+    main()
