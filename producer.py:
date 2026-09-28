@@ -1,0 +1,36 @@
+"""Producer: генерирует события и отправляет в Kafka."""
+from kafka import KafkaProducer
+import json, time, random, logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+EVENT_TYPES = ["click", "view", "purchase", "signup"]
+REGIONS = ["North", "South", "East", "West"]
+
+def generate_event(i):
+    return {
+        "id": i,
+        "user_id": random.randint(1, 1000),
+        "event_type": random.choice(EVENT_TYPES),
+        "region": random.choice(REGIONS),
+        "amount": round(random.uniform(10, 500), 2),
+        "timestamp": time.time()
+    }
+
+def main():
+    producer = KafkaProducer(
+        bootstrap_servers='localhost:9092',
+        value_serializer=lambda v: json.dumps(v).encode('utf-8')
+    )
+    for i in range(1000):
+        event = generate_event(i)
+        producer.send('user_events', value=event)
+        if i % 100 == 0:
+            logger.info(f"Отправлено {i} событий")
+        time.sleep(0.01)
+    producer.flush()
+    logger.info("Готово")
+
+if __name__ == "__main__":
+    main()
